@@ -35,18 +35,21 @@ func (d *EdgeDevicePlugin) RegisterWithKubelet(ctx context.Context, timeout time
 		return err
 	}
 
+	// Get device plugin options
+	options, err := d.GetDevicePluginOptions(ctx, nil)
+	if err != nil {
+		return err
+	}
+
 	client := pluginapi.NewRegistrationClient(conn)
 	_, err = client.Register(ctx,
 		&pluginapi.RegisterRequest{
 			Version:      pluginapi.Version,
 			ResourceName: "litmus.io/edge",
 			Endpoint:     LitmusSocketName,
-			Options: &pluginapi.DevicePluginOptions{
-				GetPreferredAllocationAvailable: false,
-				PreStartRequired:                false,
-			},
+			Options:      options,
 		},
 	)
 
-	return nil
+	return err
 }

@@ -2,46 +2,60 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"path"
 	"time"
 
+	"github.com/OchiengEd/edge-device-plugin/internal/rm"
+	"github.com/OchiengEd/edge-device-plugin/internal/usb"
 	"google.golang.org/grpc"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 const (
 	LitmusSocketName = "litmus.sock"
+	heartbeat        = 10 * time.Second
 )
 
 type EdgeDevicePlugin struct {
+	rm         rm.ResourceManager
 	socket     string
 	grpcServer *grpc.Server
-	Heartbeat  chan string
+	stop       chan interface{}
+	register   chan interface{}
 }
 
 func NewEdgeDevicePlugin() *EdgeDevicePlugin {
 	return &EdgeDevicePlugin{
-		// TODO: remove temporary socket
-		// socket:     path.Join(pluginapi.DevicePluginPath, LitmusSocketName),
-		socket:     path.Join("/Users/edmund.ochieng", LitmusSocketName),
+		rm: usb.NewManager(),
+		socket: path.Join(
+			pluginapi.DevicePluginPath,
+			LitmusSocketName,
+		),
 		grpcServer: grpc.NewServer(),
-		Heartbeat:  make(chan string),
+		stop:       make(chan interface{}),
+		register:   make(chan interface{}),
 	}
 }
 
 func (d *EdgeDevicePlugin) Start(ctx context.Context) error {
+	if err := monitorKubeletSocket(d.register); err != nil {
+		return err
+	}
+
 	if err := d.Serve(ctx); err != nil {
 		return err
 	}
 
 	err := d.RegisterWithKubelet(ctx, 5*time.Second)
 	if err != nil {
-		log.Printf("error registering with kubelet; %+v\n", err)
 		return err
 	}
+
+	log.Println("Device plugin registered with kubelet")
 
 	return nil
 }
@@ -51,7 +65,7 @@ func (d *EdgeDevicePlugin) Stop() {
 		d.grpcServer.Stop()
 	}
 	os.Remove(d.socket)
-	close(d.Heartbeat)
+	d.stop <- true
 }
 
 func (d *EdgeDevicePlugin) Serve(ctx context.Context) error {
@@ -65,7 +79,7 @@ func (d *EdgeDevicePlugin) Serve(ctx context.Context) error {
 
 	go func() {
 		if err := d.grpcServer.Serve(sock); err == nil {
-			log.Println("gRPC server crashed while starting...")
+			log.Println("eroor: gRPC server crashed while starting...")
 		}
 	}()
 
@@ -94,20 +108,26 @@ var _ pluginapi.DevicePluginServer = &EdgeDevicePlugin{}
 // Whenever a Device state change or a Device disappears, ListAndWatch
 // returns the new list
 func (d *EdgeDevicePlugin) ListAndWatch(_ *pluginapi.Empty, srv pluginapi.DevicePlugin_ListAndWatchServer) error {
-	if err := srv.Send(&pluginapi.ListAndWatchResponse{Devices: []*pluginapi.Device{}}); err != nil {
+	if err := srv.Send(&pluginapi.ListAndWatchResponse{Devices: d.rm.Devices()}); err != nil {
 		return err
 	}
 
 	for {
 		select {
-		case <-d.Heartbeat:
-			if err := srv.Send(&pluginapi.ListAndWatchResponse{Devices: []*pluginapi.Device{}}); err != nil {
-				return nil
+		case <-time.After(heartbeat):
+			log.Println("Heartbeat received...")
+			if err := srv.Send(&pluginapi.ListAndWatchResponse{Devices: d.rm.Devices()}); err != nil {
+				return err
 			}
+		case <-d.register:
+			if err := d.RegisterWithKubelet(context.Background(), 5*time.Second); err != nil {
+				return err
+			}
+		case <-d.stop:
+			return nil
+
 		}
 	}
-
-	return nil
 }
 
 // GetPreferredAllocation returns a preferred set of devices to allocate
@@ -117,7 +137,7 @@ func (d *EdgeDevicePlugin) ListAndWatch(_ *pluginapi.Empty, srv pluginapi.Device
 // informed allocation decision when possible.
 func (d *EdgeDevicePlugin) GetPreferredAllocation(_ context.Context, prefs *pluginapi.PreferredAllocationRequest) (*pluginapi.PreferredAllocationResponse, error) {
 	for _, req := range prefs.ContainerRequests {
-		log.Printf("Preferred requests: %+v\n", req)
+		fmt.Println(req.AvailableDeviceIDs, req.MustIncludeDeviceIDs, req.AllocationSize)
 	}
 	return &pluginapi.PreferredAllocationResponse{}, nil
 }
@@ -126,13 +146,16 @@ func (d *EdgeDevicePlugin) GetPreferredAllocation(_ context.Context, prefs *plug
 // Plugin can run device specific operations and instruct Kubelet
 // of the steps to make the Device available in the container
 func (d *EdgeDevicePlugin) Allocate(_ context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
+	var response *pluginapi.AllocateResponse
 
 	for _, req := range reqs.ContainerRequests {
-		_ = req.GetDevicesIDs()
-		log.Printf("Request received: %+v\n", req)
+		response.ContainerResponses = append(
+			response.ContainerResponses,
+			d.allocateContainerRequests(req.GetDevicesIDs()),
+		)
 	}
 
-	return &pluginapi.AllocateResponse{}, nil
+	return response, nil
 }
 
 // PreStartContainer is called, if indicated by Device Plugin during registeration phase,
