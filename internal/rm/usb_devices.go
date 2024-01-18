@@ -1,26 +1,25 @@
-package usb
+package rm
 
 import (
-	"github.com/OchiengEd/edge-device-plugin/internal/rm"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
-var _ rm.ResourceManager = &Manager{}
+var _ ResourceManager = &usbResourceManager{}
 
-type Manager struct {
-	devices []rm.Device
+type usbResourceManager struct {
+	devices []Device
 }
 
 // NewManager initializes a Manager which implements
 // the resource manager interface
-func NewManager() *Manager {
+func NewUSBResourceManager() *usbResourceManager {
 	devs, _ := findDevices()
-	return &Manager{
+	return &usbResourceManager{
 		devices: devs,
 	}
 }
 
-func (r *Manager) Discover() ([]rm.Device, error) {
+func (r *usbResourceManager) Discover() ([]Device, error) {
 	devices, err := findDevices()
 	if err != nil {
 		return nil, err
@@ -30,7 +29,7 @@ func (r *Manager) Discover() ([]rm.Device, error) {
 	return r.devices, nil
 }
 
-func (r *Manager) Devices() []*pluginapi.Device {
+func (r *usbResourceManager) Devices() []*pluginapi.Device {
 	devices, err := findDevices()
 	if err != nil {
 		return nil
@@ -47,7 +46,7 @@ func (r *Manager) Devices() []*pluginapi.Device {
 	return result
 }
 
-func (r *Manager) GetDeviceByID(id string) *rm.Device {
+func (r *usbResourceManager) GetDeviceByID(id string) *Device {
 	devices, err := findDevices()
 	if err != nil {
 		return nil
@@ -66,6 +65,6 @@ func (r *Manager) GetDeviceByID(id string) *rm.Device {
 // AvailableDeviceIDs ([]string)
 // MustIncludeDeviceIDs ([]string)
 // AllocationSize (int32)
-func (r *Manager) AllocateDevice(availableDeviceIds []string, mustIncludeDeviceIds []string, allocationSize int32) {
+func (r *usbResourceManager) AllocateDevice(availableDeviceIds []string, mustIncludeDeviceIds []string, allocationSize int32) {
 	panic("not implemented") // TODO: Implement
 }

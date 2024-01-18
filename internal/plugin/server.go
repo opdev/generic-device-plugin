@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/OchiengEd/edge-device-plugin/internal/rm"
-	"github.com/OchiengEd/edge-device-plugin/internal/usb"
 	"google.golang.org/grpc"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
@@ -30,7 +29,7 @@ type EdgeDevicePlugin struct {
 
 func NewEdgeDevicePlugin() *EdgeDevicePlugin {
 	return &EdgeDevicePlugin{
-		rm: usb.NewManager(),
+		rm: rm.NewUSBResourceManager(),
 		socket: path.Join(
 			pluginapi.DevicePluginPath,
 			LitmusSocketName,

@@ -1,4 +1,4 @@
-package usb
+package rm
 
 import (
 	"fmt"
@@ -6,17 +6,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/OchiengEd/edge-device-plugin/internal/rm"
 )
 
-func findDevices() ([]rm.Device, error) {
+func findDevices() ([]Device, error) {
 	uevents, err := filepath.Glob("/sys/bus/usb/devices/[0-9]-[0-9]/uevent")
 	if err != nil {
 		return nil, err
 	}
 
-	var devices []rm.Device
+	var devices []Device
 	for _, device := range uevents {
 		dev, _ := parseDeviceInfo(device)
 		devices = append(devices, *dev)
@@ -25,7 +23,7 @@ func findDevices() ([]rm.Device, error) {
 	return devices, nil
 }
 
-func parseDeviceInfo(uevent string) (*rm.Device, error) {
+func parseDeviceInfo(uevent string) (*Device, error) {
 	device, err := createDeviceFromUevent(uevent)
 	if err != nil {
 		return nil, err
@@ -45,13 +43,13 @@ func getDeviceNameFromUevent(path string) string {
 	return match[re.SubexpIndex("dev")]
 }
 
-func createDeviceFromUevent(path string) (*rm.Device, error) {
+func createDeviceFromUevent(path string) (*Device, error) {
 	contents, err := readFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	res := new(rm.Device)
+	res := new(Device)
 	res.Name = getDeviceNameFromUevent(path)
 
 	re := regexp.MustCompile("^?(?P<key>[A-Za-z]+)=(?P<value>[A-Za-z0-9_/]+)$?")
@@ -91,7 +89,7 @@ func readFile(path string) ([]byte, error) {
 	return contents, nil
 }
 
-func setSerial(d *rm.Device) {
+func setSerial(d *Device) {
 	f := fmt.Sprintf("/sys/bus/usb/devices/%s/serial", d.Name)
 	contents, err := readFile(f)
 	if err != nil {
@@ -101,7 +99,7 @@ func setSerial(d *rm.Device) {
 	d.Serial = string(contents)
 }
 
-func setProductId(d *rm.Device) {
+func setProductId(d *Device) {
 	f := fmt.Sprintf("/sys/bus/usb/devices/%s/idProduct", d.Name)
 	contents, err := readFile(f)
 	if err != nil {
@@ -111,7 +109,7 @@ func setProductId(d *rm.Device) {
 	d.ProductId = string(contents)
 }
 
-func setVendorId(d *rm.Device) {
+func setVendorId(d *Device) {
 	f := fmt.Sprintf("/sys/bus/usb/devices/%s/idVendor", d.Name)
 	contents, err := readFile(f)
 	if err != nil {
