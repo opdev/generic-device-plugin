@@ -7,26 +7,20 @@ import (
 var _ ResourceManager = &usbResourceManager{}
 
 type usbResourceManager struct {
-	devices []Device
+	devices map[string]Device
 }
 
-// NewManager initializes a Manager which implements
-// the resource manager interface
-func NewUSBResourceManager() *usbResourceManager {
-	devs, _ := findDevices()
-	return &usbResourceManager{
-		devices: devs,
-	}
-}
-
-func (r *usbResourceManager) Discover() ([]Device, error) {
-	devices, err := findDevices()
+// USBResourceManager initializes a new USB resource manager
+// which implements the resource manager interface
+func USBResourceManager() *usbResourceManager {
+	devs, err := findDevices()
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
-	r.devices = devices
-	return r.devices, nil
+	return &usbResourceManager{
+		devices: mapDevices(devs),
+	}
 }
 
 func (r *usbResourceManager) Devices() []*pluginapi.Device {
@@ -37,28 +31,19 @@ func (r *usbResourceManager) Devices() []*pluginapi.Device {
 
 	var result []*pluginapi.Device
 	for _, device := range devices {
-		result = append(result, &pluginapi.Device{
-			ID:     device.Name,
-			Health: pluginapi.Healthy,
-		})
+		result = append(result, device.Device)
 	}
 
 	return result
 }
 
-func (r *usbResourceManager) GetDeviceByID(id string) *Device {
-	devices, err := findDevices()
-	if err != nil {
-		return nil
-	}
+func (r *usbResourceManager) DeviceMap() map[string]Device {
+	return r.devices
+}
 
-	for _, device := range devices {
-		if device.Name == id {
-			return &device
-		}
-	}
-
-	return nil
+func (r *usbResourceManager) GetDeviceByID(id string) (Device, bool) {
+	dev, ok := r.devices[id]
+	return dev, ok
 }
 
 // AllocateDevice function accepts the arguments:

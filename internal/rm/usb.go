@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 func findDevices() ([]Device, error) {
@@ -16,25 +18,41 @@ func findDevices() ([]Device, error) {
 
 	var devices []Device
 	for _, device := range uevents {
-		dev, _ := parseDeviceInfo(device)
+		dev := parseDeviceInfo(device)
 		devices = append(devices, *dev)
 	}
 
 	return devices, nil
 }
 
-func parseDeviceInfo(uevent string) (*Device, error) {
+func mapDevices(devices []Device) map[string]Device {
+	var deviceMap = make(map[string]Device)
+	for _, dev := range devices {
+		deviceMap[dev.DevName] = dev
+	}
+
+	return deviceMap
+}
+
+func parseDeviceInfo(uevent string) *Device {
 	device, err := createDeviceFromUevent(uevent)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	// Set properties not in the uevent file
-	setSerial(device)
-	setProductId(device)
-	setVendorId(device)
+	device.Serial = getSerial(device)
+	device.ProductId = getProductId(device)
+	device.VendorId = getVendorId(device)
+	device.Manufacturer = getManufacturer(device)
+	device.Product = getProduct(device)
 
-	return device, nil
+	device.Device = &pluginapi.Device{
+		ID:     device.Name,
+		Health: pluginapi.Healthy,
+	}
+
+	return device
 }
 
 func getDeviceNameFromUevent(path string) string {
@@ -89,32 +107,52 @@ func readFile(path string) ([]byte, error) {
 	return contents, nil
 }
 
-func setSerial(d *Device) {
+func getSerial(d *Device) string {
 	f := fmt.Sprintf("/sys/bus/usb/devices/%s/serial", d.Name)
 	contents, err := readFile(f)
 	if err != nil {
-		return
+		return ""
 	}
 
-	d.Serial = string(contents)
+	return string(contents)
 }
 
-func setProductId(d *Device) {
+func getProductId(d *Device) string {
 	f := fmt.Sprintf("/sys/bus/usb/devices/%s/idProduct", d.Name)
 	contents, err := readFile(f)
 	if err != nil {
-		return
+		return ""
 	}
 
-	d.ProductId = string(contents)
+	return string(contents)
 }
 
-func setVendorId(d *Device) {
+func getVendorId(d *Device) string {
 	f := fmt.Sprintf("/sys/bus/usb/devices/%s/idVendor", d.Name)
 	contents, err := readFile(f)
 	if err != nil {
-		return
+		return ""
 	}
 
-	d.VenderId = string(contents)
+	return string(contents)
+}
+
+func getProduct(d *Device) string {
+	f := fmt.Sprintf("/sys/bus/usb/devices/%s/product", d.Name)
+	contents, err := readFile(f)
+	if err != nil {
+		return ""
+	}
+
+	return string(contents)
+}
+
+func getManufacturer(d *Device) string {
+	f := fmt.Sprintf("/sys/bus/usb/devices/%s/manufacturer", d.Name)
+	contents, err := readFile(f)
+	if err != nil {
+		return ""
+	}
+
+	return string(contents)
 }
