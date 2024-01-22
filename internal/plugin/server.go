@@ -24,18 +24,20 @@ type EdgeDevicePlugin struct {
 	socket     string
 	grpcServer *grpc.Server
 	stop       chan interface{}
+	refresh    chan interface{}
 	register   chan interface{}
 }
 
 func NewEdgeDevicePlugin() *EdgeDevicePlugin {
 	return &EdgeDevicePlugin{
-		rm: rm.NewUSBResourceManager(),
+		rm: rm.USBResourceManager(),
 		socket: path.Join(
 			pluginapi.DevicePluginPath,
 			LitmusSocketName,
 		),
 		grpcServer: grpc.NewServer(),
 		stop:       make(chan interface{}),
+		refresh:    make(chan interface{}),
 		register:   make(chan interface{}),
 	}
 }
@@ -92,6 +94,8 @@ func (d *EdgeDevicePlugin) Serve(ctx context.Context) error {
 	return nil
 }
 
+var _ pluginapi.DevicePluginServer = &EdgeDevicePlugin{}
+
 // GetDevicePluginOptions returns options to be communicated with Device
 // Manager
 func (d *EdgeDevicePlugin) GetDevicePluginOptions(_ context.Context, _ *pluginapi.Empty) (*pluginapi.DevicePluginOptions, error) {
@@ -100,8 +104,6 @@ func (d *EdgeDevicePlugin) GetDevicePluginOptions(_ context.Context, _ *pluginap
 		GetPreferredAllocationAvailable: false,
 	}, nil
 }
-
-var _ pluginapi.DevicePluginServer = &EdgeDevicePlugin{}
 
 // ListAndWatch returns a stream of List of Devices
 // Whenever a Device state change or a Device disappears, ListAndWatch
@@ -144,14 +146,26 @@ func (d *EdgeDevicePlugin) GetPreferredAllocation(_ context.Context, prefs *plug
 // Allocate is called during container creation so that the Device
 // Plugin can run device specific operations and instruct Kubelet
 // of the steps to make the Device available in the container
-func (d *EdgeDevicePlugin) Allocate(_ context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	var response *pluginapi.AllocateResponse
+func (d *EdgeDevicePlugin) Allocate(_ context.Context, req *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
+	var response = &pluginapi.AllocateResponse{
+		ContainerResponses: make([]*pluginapi.ContainerAllocateResponse, 0, len(req.ContainerRequests)),
+	}
 
-	for _, req := range reqs.ContainerRequests {
-		response.ContainerResponses = append(
-			response.ContainerResponses,
-			d.allocateContainerRequests(req.GetDevicesIDs()),
-		)
+	for _, r := range req.ContainerRequests {
+		resp := new(pluginapi.ContainerAllocateResponse)
+		// Add devices in request to the response
+		for _, id := range r.DevicesIDs {
+			dev, ok := d.rm.GetDeviceByID(id)
+			if !ok {
+				return nil, fmt.Errorf("requested device %q does not exist", id)
+			}
+			if dev.Device.Health != pluginapi.Healthy {
+				return nil, fmt.Errorf("requested device %q is not healthy", id)
+			}
+			resp.Devices = append(resp.Devices, dev.DeviceSpec()...)
+			resp.Mounts = append(resp.Mounts, dev.Mounts()...)
+		}
+		response.ContainerResponses = append(response.ContainerResponses, resp)
 	}
 
 	return response, nil
