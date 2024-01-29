@@ -1,2 +1,12 @@
+OS ?= linux
+ARCH ?= amd64
+IMAGE_BUILDER ?= podman
+IMAGE_REPO ?= quay.io/eochieng
+VERSION ?= latest
+
 build:
-	GOOS=linux GOARCH=amd64 go build -o bin/edge-deviceplugin cmd/plugin/main.go
+	GOOS=$(OS) GOARCH=$(ARCH) go build -o bin/edge-deviceplugin cmd/plugin/main.go
+
+.PHONY: image-build
+image-build:
+	$(IMAGE_BUILDER) build -t $(IMAGE_REPO)/edge-deviceplugin:$(VERSION) .
