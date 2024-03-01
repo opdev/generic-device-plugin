@@ -2,21 +2,33 @@ package main
 
 import (
 	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/OchiengEd/edge-device-plugin/internal/plugin"
-	"github.com/golang/glog"
 )
 
 func main() {
 	devplugin := plugin.NewEdgeDevicePlugin()
-
 	ctx := context.Background()
-	if err := devplugin.Start(ctx); err != nil {
-		glog.Error("error starting device plugin server; %+v\n", err)
+
+	if err := devplugin.Run(ctx); err != nil {
+		log.Fatalf("error starting device plugin server; %+v\n", err)
 	}
 
-	glog.Info("Device plugin successfully started")
+	log.Println("Device plugin successfully started")
 
-	msg := <-ctx.Done()
-	glog.Info("Context cancellation; %+v\n", msg)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT)
+
+	for {
+		select {
+		case <-sigCh:
+			log.Println("Device plugin is terminating...")
+			devplugin.Stop()
+			os.Exit(0)
+		}
+	}
 }

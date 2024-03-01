@@ -45,8 +45,8 @@ func (d *EdgeDevicePlugin) RegisterWithKubelet(ctx context.Context, timeout time
 	_, err = client.Register(ctx,
 		&pluginapi.RegisterRequest{
 			Version:      pluginapi.Version,
-			ResourceName: "litmus.io/edge",
-			Endpoint:     LitmusSocketName,
+			ResourceName: "example.io/device",
+			Endpoint:     GenericSocketName,
 			Options:      options,
 		},
 	)

@@ -4,7 +4,6 @@ go 1.21.5
 
 require (
 	github.com/fsnotify/fsnotify v1.7.0
-	github.com/golang/glog v1.1.0
 	google.golang.org/grpc v1.58.3
 	k8s.io/kubelet v0.29.0
 )

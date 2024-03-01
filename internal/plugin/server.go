@@ -15,17 +15,15 @@ import (
 )
 
 const (
-	LitmusSocketName = "litmus.sock"
-	heartbeat        = 10 * time.Second
+	GenericSocketName = "generic.sock"
+	heartbeat         = 10 * time.Second
 )
 
 type EdgeDevicePlugin struct {
 	rm         rm.ResourceManager
 	socket     string
 	grpcServer *grpc.Server
-	stop       chan interface{}
-	refresh    chan interface{}
-	register   chan interface{}
+	quit       chan interface{}
 }
 
 func NewEdgeDevicePlugin() *EdgeDevicePlugin {
@@ -33,30 +31,24 @@ func NewEdgeDevicePlugin() *EdgeDevicePlugin {
 		rm: rm.USBResourceManager(),
 		socket: path.Join(
 			pluginapi.DevicePluginPath,
-			LitmusSocketName,
+			GenericSocketName,
 		),
 		grpcServer: grpc.NewServer(),
-		stop:       make(chan interface{}),
-		refresh:    make(chan interface{}),
-		register:   make(chan interface{}),
+		quit:       make(chan interface{}),
 	}
 }
 
 func (d *EdgeDevicePlugin) Start(ctx context.Context) error {
-	if err := monitorKubeletSocket(d.register); err != nil {
-		return err
-	}
-
+	// Start service requests for Device Plugin (gRPC) server
 	if err := d.Serve(ctx); err != nil {
 		return err
 	}
 
+	// Register device plugin with kubelet
 	err := d.RegisterWithKubelet(ctx, 5*time.Second)
 	if err != nil {
 		return err
 	}
-
-	log.Println("Device plugin registered with kubelet")
 
 	return nil
 }
@@ -65,12 +57,12 @@ func (d *EdgeDevicePlugin) Stop() {
 	if d != nil && d.grpcServer != nil {
 		d.grpcServer.Stop()
 	}
+	d.grpcServer = nil
 	os.Remove(d.socket)
-	d.stop <- true
 }
 
 func (d *EdgeDevicePlugin) Serve(ctx context.Context) error {
-	os.Remove(d.socket)
+	_ = os.Remove(d.socket)
 
 	sock, err := net.Listen("unix", d.socket)
 	if err != nil {
@@ -79,8 +71,16 @@ func (d *EdgeDevicePlugin) Serve(ctx context.Context) error {
 	pluginapi.RegisterDevicePluginServer(d.grpcServer, d)
 
 	go func() {
-		if err := d.grpcServer.Serve(sock); err == nil {
-			log.Println("eroor: gRPC server crashed while starting...")
+		for {
+			select {
+			case <-d.quit:
+				// Terminate goroutine when a message is written to quit channel
+				return
+			default:
+				if err := d.grpcServer.Serve(sock); err != nil {
+					log.Println("error: DevicePlugin server crashed while starting...", err.Error())
+				}
+			}
 		}
 	}()
 
@@ -116,17 +116,9 @@ func (d *EdgeDevicePlugin) ListAndWatch(_ *pluginapi.Empty, srv pluginapi.Device
 	for {
 		select {
 		case <-time.After(heartbeat):
-			log.Println("Heartbeat received...")
 			if err := srv.Send(&pluginapi.ListAndWatchResponse{Devices: d.rm.Devices()}); err != nil {
 				return err
 			}
-		case <-d.register:
-			if err := d.RegisterWithKubelet(context.Background(), 5*time.Second); err != nil {
-				return err
-			}
-		case <-d.stop:
-			return nil
-
 		}
 	}
 }
