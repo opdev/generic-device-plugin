@@ -1,4 +1,4 @@
-module github.com/OchiengEd/edge-device-plugin
+module github.com/opdev/generic-device-plugin
 
 go 1.21.5
 

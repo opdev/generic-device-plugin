@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/OchiengEd/edge-device-plugin/internal/plugin"
+	"github.com/opdev/generic-device-plugin/internal/plugin"
 )
 
 func main() {

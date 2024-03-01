@@ -1,4 +1,4 @@
-# Litmus Edge Device Plugin for Kubernetes
+# Generic Edge Device Plugin for Kubernetes
 
 ## Overview
 
@@ -6,7 +6,7 @@ Pods could request to be allocated devices using the Kubernetes Pod `resources` 
 ```yaml
 resources:
   limits:
-    litmus.io/edge: 10
+    vendor.io/device: 10
 ```
 
 ## Getting Started
@@ -17,18 +17,18 @@ To install the plugin, choose what devices should be discovered and deploy the f
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: edge-device-plugin
+  name: generic-device-plugin
   namespace: kube-system
   labels:
-    app.kubernetes.io/name: edge-device-plugin
+    app.kubernetes.io/name: generic-device-plugin
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: edge-device-plugin
+      app.kubernetes.io/name: generic-device-plugin
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: edge-device-plugin
+        app.kubernetes.io/name: generic-device-plugin
     spec:
       priorityClassName: system-node-critical
       tolerations:
@@ -37,8 +37,8 @@ spec:
       - operator: "Exists"
         effect: "NoSchedule"
       containers:
-      - image: quay.io/eochieng/edge-deviceplugin:latest
-        name: edge-device-plugin
+      - image: quay.io/opdev/generic-device-plugin:latest
+        name: generic-device-plugin
         resources:
           requests:
             cpu: 50m

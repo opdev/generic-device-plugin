@@ -4,15 +4,15 @@ ARG OS=linux
 FROM docker.io/golang:1.21 AS builder
 ARG ARCH
 ARG OS
-COPY . /go/src/edge-device-plugin
-WORKDIR /go/src/edge-device-plugin
+COPY . /go/src/generic-device-plugin
+WORKDIR /go/src/generic-device-plugin
 RUN make build OS=${OS} ARCH=${ARCH}
 
 FROM registry.access.redhat.com/ubi9/ubi-micro
-LABEL name="edge-device-plugin" \
+LABEL name="generic-device-plugin" \
       maintainer="Edmund Ochieng" \
       version="alpha" \
-      summary="Device plugin for Litmus Edge" \
-      description="A plugin to expose usb and serial devices to the Litmus application"
-COPY --from=builder /go/src/edge-device-plugin/bin/edge-deviceplugin /usr/local/bin/edge-device-plugin
-ENTRYPOINT ["/usr/local/bin/edge-device-plugin"]
+      summary="Generic Device plugin for USB Devices" \
+      description="A generic device plugin to expose usb and serial devices to Kubelet"
+COPY --from=builder /go/src/generic-device-plugin/bin/generic-device-plugin /usr/local/bin/generic-device-plugin
+ENTRYPOINT ["/usr/local/bin/generic-device-plugin"]

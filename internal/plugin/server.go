@@ -9,7 +9,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/OchiengEd/edge-device-plugin/internal/rm"
+	"github.com/opdev/generic-device-plugin/internal/rm"
 	"google.golang.org/grpc"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
