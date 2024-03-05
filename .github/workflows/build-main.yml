@@ -1,0 +1,26 @@
+name: Build Main
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-main:
+    name: Build and push main snapshot images
+    runs-on: ubuntu-latest
+    steps:
+     - name: checkout code
+       uses: actions/checkout@v4
+     - name: build image
+       run: make image-build
+     - name: push image
+       id: push-image
+       uses: redhat-actions/push-to-registry@v2
+       with:
+         image: "generic-device-plugin"
+         tags: "latest"
+         registry: ${{ secrets.IMAGE_REGISTRY }}
+         username: ${{ secrets.REGISTRY_USER }}
+         password: ${{ secrets.REGISTRY_PASSWORD }}
+     - name: Print image url
+       run: echo "Image pushed to ${{ steps.push-image.outputs.registry-paths }}"
